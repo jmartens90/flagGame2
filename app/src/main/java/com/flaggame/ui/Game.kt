@@ -43,16 +43,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.flaggame.data.Country
 import com.flaggame.data.GameData
+import com.flaggame.data.Place
 
-data class Answer(val country: Country, val correct: Boolean)
+data class Answer(val place: Place, val correct: Boolean)
 
 data class GameResult(val config: GameConfig, val answers: List<Answer>, val percent: Int, val newBest: Boolean)
 
-fun pool(data: GameData, config: GameConfig): List<Country> =
-    data.countries
-        .filter { config.region == WORLD || it.region == config.region }
+fun pool(data: GameData, config: GameConfig): List<Place> =
+    data.places(config.set)
+        .filter { config.group == ALL || it.group == config.group }
+        .filter { config.quiz == Quiz.FLAGS || it.capital != null }
         .filter { config.mode != Mode.COLOR || it.colorable }
 
 @Composable
@@ -94,14 +95,15 @@ fun GameScreen(
                 Text("No flags to play here.", Modifier.padding(24.dp))
                 return@Column
             }
-            val country = questions[index]
+            val place = questions[index]
             key(round, index) {
                 Box(Modifier.weight(1f)) {
+                    val pool = pool(data, config)
                     when (config.mode) {
-                        Mode.CHOICE -> MultipleChoiceQuestion(data, country, pool(data, config), next)
-                        Mode.TYPE -> TypeAnswerQuestion(data, country, next)
-                        Mode.MAP -> MapQuestion(data, country, config.region, next)
-                        Mode.COLOR -> ColorQuestion(data, country, next)
+                        Mode.CHOICE -> MultipleChoiceQuestion(data, place, config.quiz, pool, next)
+                        Mode.TYPE -> TypeAnswerQuestion(data, place, config.quiz, next)
+                        Mode.MAP -> MapQuestion(data, place, config, pool, next)
+                        Mode.COLOR -> ColorQuestion(data, place, next)
                     }
                 }
             }
@@ -110,25 +112,27 @@ fun GameScreen(
 }
 
 @Composable
-fun FlagImage(data: GameData, country: Country, modifier: Modifier = Modifier) {
-    val bitmap = remember(country.code) { data.flag(country.code).asImageBitmap() }
-    Image(
-        bitmap = bitmap,
-        contentDescription = "Flag",
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-            .aspectRatio(4f / 3f)
-            .clip(RoundedCornerShape(6.dp))
-            .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(6.dp)),
-    )
+fun FlagImage(data: GameData, place: Place, modifier: Modifier = Modifier) {
+    val bitmap = remember(place) { data.flag(place).asImageBitmap() }
+    Box(modifier.aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = "Flag",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .aspectRatio(bitmap.width.toFloat() / bitmap.height)
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(6.dp)),
+        )
+    }
 }
 
 /** "Correct!" / "It's X" line plus a Next button, shown after answering. */
 @Composable
-fun Feedback(correct: Boolean, country: Country, extra: String? = null, onNext: () -> Unit) {
+fun Feedback(correct: Boolean, answer: String, extra: String? = null, onNext: () -> Unit) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            if (correct) "Correct! ${country.displayName}" else "It's ${country.displayName}",
+            if (correct) "Correct! $answer" else "It's $answer",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = if (correct) Correct else Wrong,
@@ -142,27 +146,37 @@ fun Feedback(correct: Boolean, country: Country, extra: String? = null, onNext: 
     }
 }
 
+/** The answer being asked for: the place's name, or its capital. */
+fun answerOf(place: Place, quiz: Quiz): String =
+    if (quiz == Quiz.CAPITALS) place.displayCapital ?: "" else place.label
+
+fun questionText(place: Place, quiz: Quiz): String =
+    if (quiz == Quiz.CAPITALS) "What is the capital of ${place.label}?" else "Which ${place.kind} is this?"
+
 @Composable
 fun ResultsScreen(data: GameData, result: GameResult, onPlayAgain: () -> Unit, onHome: () -> Unit) {
     val right = result.answers.count { it.correct }
     val wrong = result.answers.filter { !it.correct }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(result.config.mode.title, style = MaterialTheme.typography.titleMedium)
+            Text("${result.config.set.title} · ${result.config.quiz.title} · ${result.config.mode.title}", style = MaterialTheme.typography.titleMedium)
             Text("${result.percent}%", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
             Text("$right of ${result.answers.size} right", style = MaterialTheme.typography.titleLarge)
             if (result.newBest) {
-                Text("New best for ${result.config.region}!", color = Correct, style = MaterialTheme.typography.titleMedium)
+                Text("New best score!", color = Correct, style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(16.dp))
             if (wrong.isNotEmpty()) {
                 Text("Worth another look", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(wrong, key = { it.country.code }) { a ->
+                    items(wrong, key = { it.place.code }) { a ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            FlagImage(data, a.country, Modifier.width(64.dp))
+                            FlagImage(data, a.place, Modifier.width(64.dp))
                             Spacer(Modifier.width(12.dp))
-                            Text(a.country.displayName, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (result.config.quiz == Quiz.CAPITALS) "${a.place.label}: ${a.place.displayCapital}" else a.place.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
                         }
                     }
                 }

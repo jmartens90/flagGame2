@@ -23,22 +23,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.flaggame.data.Country
 import com.flaggame.data.GameData
+import com.flaggame.data.Place
 import kotlinx.coroutines.delay
 
 @Composable
-fun MultipleChoiceQuestion(data: GameData, country: Country, pool: List<Country>, onNext: (Boolean) -> Unit) {
-    val options = remember(country) {
-        // Prefer look-alike distractors from the same region, then fill from anywhere.
-        val sameRegion = data.countries.filter { it.region == country.region && it != country }.shuffled()
-        val others = (pool + data.countries).distinct().filter { it != country && it !in sameRegion }.shuffled()
-        (listOf(country) + (sameRegion.take(2) + others).take(3)).shuffled()
+fun MultipleChoiceQuestion(data: GameData, place: Place, quiz: Quiz, pool: List<Place>, onNext: (Boolean) -> Unit) {
+    val options = remember(place) {
+        // Prefer look-alike distractors from the same group, then fill from anywhere.
+        val usable = data.places(place.set).filter { it != place && (quiz == Quiz.FLAGS || it.capital != null) }
+        val sameGroup = usable.filter { it.group == place.group }.shuffled()
+        val others = (pool + usable).distinct().filter { it != place && it in usable && it !in sameGroup }.shuffled()
+        (listOf(place) + (sameGroup.take(2) + others + sameGroup.drop(2)).distinct().take(3)).shuffled()
     }
-    var picked by remember(country) { mutableStateOf<Country?>(null) }
+    var picked by remember(place) { mutableStateOf<Place?>(null) }
 
     LaunchedEffect(picked) {
-        if (picked == country) { delay(900); onNext(true) }
+        if (picked == place) { delay(900); onNext(true) }
     }
 
     Column(
@@ -46,12 +47,12 @@ fun MultipleChoiceQuestion(data: GameData, country: Country, pool: List<Country>
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FlagImage(data, country, Modifier.fillMaxWidth())
-        Text("Which country is this?", style = MaterialTheme.typography.titleLarge)
+        FlagImage(data, place, Modifier.fillMaxWidth())
+        Text(questionText(place, quiz), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         options.forEach { option ->
             val color = when {
                 picked == null -> MaterialTheme.colorScheme.primary
-                option == country -> Correct
+                option == place -> Correct
                 option == picked -> Wrong
                 else -> Color.Gray
             }
@@ -60,12 +61,12 @@ fun MultipleChoiceQuestion(data: GameData, country: Country, pool: List<Country>
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = color, disabledContainerColor = color),
             ) {
-                Text(option.displayName, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                Text(answerOf(option, quiz), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             }
         }
         val p = picked
-        if (p != null && p != country) {
-            Feedback(false, country) { onNext(false) }
+        if (p != null && p != place) {
+            Feedback(false, answerOf(place, quiz)) { onNext(false) }
         }
     }
 }

@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                             onQuit = { config = null },
                             onFinished = { answers ->
                                 val pct = if (answers.isEmpty()) 0 else answers.count { it.correct } * 100 / answers.size
-                                val newBest = scores.record(c.mode.name, c.region, pct)
+                                val newBest = scores.record(c.scoreKey, pct)
                                 result = GameResult(c, answers, pct, newBest)
                             },
                         )
