@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.flaggame.data.FlagSet
 import com.flaggame.data.GameData
+import com.flaggame.data.Progress
 import com.flaggame.data.Scores
 
 enum class Mode(val title: String, val description: String, val capitals: String, val icon: ImageVector) {
@@ -53,17 +55,21 @@ enum class Quiz(val title: String) { FLAGS("Flags"), CAPITALS("Capitals") }
 
 const val ALL = "All"
 
-data class GameConfig(val set: FlagSet, val quiz: Quiz, val mode: Mode, val group: String, val length: Int) {
+data class GameConfig(
+    val set: FlagSet, val quiz: Quiz, val mode: Mode, val group: String, val length: Int,
+    val learning: Boolean = false,
+) {
     val scoreKey get() = "${set.id}|${quiz.name}|${mode.name}|$group"
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun HomeScreen(data: GameData, scores: Scores, onStart: (GameConfig) -> Unit) {
+fun HomeScreen(data: GameData, scores: Scores, progress: Progress, onStart: (GameConfig) -> Unit) {
     var set by rememberSaveable { mutableStateOf(FlagSet.COUNTRIES) }
     var quiz by rememberSaveable { mutableStateOf(Quiz.FLAGS) }
     var group by rememberSaveable { mutableStateOf(ALL) }
     var length by rememberSaveable { mutableStateOf(10) }
+    var learning by rememberSaveable { mutableStateOf(false) }
     val groups = listOf(ALL) + data.groups(set)
     if (group !in groups) group = ALL
     val count = data.places(set).count {
@@ -100,13 +106,31 @@ fun HomeScreen(data: GameData, scores: Scores, onStart: (GameConfig) -> Unit) {
                         FilterChip(selected = length == n, onClick = { length = n }, label = { Text(label) })
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Learning mode", style = MaterialTheme.typography.titleMedium)
+                        val places = data.places(set).filter {
+                            (group == ALL || it.group == group) && (quiz == Quiz.FLAGS || it.capital != null)
+                        }
+                        val caps = quiz == Quiz.CAPITALS
+                        val mastered = places.count { progress.streak(it, caps) >= Progress.MASTERED }
+                        val half = places.count { progress.streak(it, caps) in Progress.HALF until Progress.MASTERED }
+                        Text(
+                            "Right 5 times in a row: asked half as often. 10 in a row: only now and then. " +
+                                "Here: $mastered known well, $half nearly there.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = learning, onCheckedChange = { learning = it }, modifier = Modifier.padding(start = 12.dp))
+                }
 
             }
             val games: @Composable ColumnScope.() -> Unit = {
                 Section("Game")
                 Mode.entries.forEach { mode ->
                     val enabled = count > 0 && !(mode == Mode.COLOR && quiz == Quiz.CAPITALS)
-                    val config = GameConfig(set, quiz, mode, group, length)
+                    val config = GameConfig(set, quiz, mode, group, length, learning)
                     ElevatedCard(
                         onClick = { onStart(config) },
                         enabled = enabled,

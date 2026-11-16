@@ -40,3 +40,12 @@ class FuzzyCountryTest {
     @Test fun capitalTypoAccepted() = assertTrue(gambia.matchesCapital("banjull", all))
     @Test fun otherCapitalRejected() = assertFalse(gambia.matchesCapital("Lusaka", all))
 }
+
+class LearningWeightTest {
+    @Test fun weights() {
+        assertEquals(1.0, Progress.weightFor(0), 0.0)
+        assertEquals(1.0, Progress.weightFor(4), 0.0)
+        assertEquals(0.5, Progress.weightFor(5), 0.0)
+        assertEquals(0.1, Progress.weightFor(10), 0.0)
+    }
+}

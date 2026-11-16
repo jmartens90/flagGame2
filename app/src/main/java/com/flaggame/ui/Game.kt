@@ -44,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.flaggame.data.GameData
+import com.flaggame.data.Progress
+import kotlin.random.Random
 import com.flaggame.data.Place
 
 data class Answer(val place: Place, val correct: Boolean)
@@ -59,20 +61,30 @@ fun pool(data: GameData, config: GameConfig): List<Place> =
 @Composable
 fun GameScreen(
     data: GameData,
+    progress: Progress,
     config: GameConfig,
     round: Int,
     onQuit: () -> Unit,
     onFinished: (List<Answer>) -> Unit,
 ) {
     val questions = remember(config, round) {
-        val all = pool(data, config).shuffled()
-        if (config.length > 0) all.take(config.length) else all
+        val all = pool(data, config)
+        val caps = config.quiz == Quiz.CAPITALS
+        when {
+            !config.learning -> all.shuffled().let { if (config.length > 0) it.take(config.length) else it }
+            // Learning mode: well-known flags are picked less often (see Progress.weight).
+            config.length > 0 -> progress.pick(all, caps, config.length)
+            // "All" in learning mode: each flag is in the round with a chance equal to its weight.
+            else -> all.filter { Random.nextDouble() < progress.weight(it, caps) }.shuffled()
+                .ifEmpty { progress.pick(all, caps, 10) }
+        }
     }
     val answers = remember(config, round) { mutableStateListOf<Answer>() }
     var index by remember(config, round) { mutableIntStateOf(0) }
 
     val next: (Boolean) -> Unit = { correct ->
         answers += Answer(questions[index], correct)
+        progress.record(questions[index], config.quiz == Quiz.CAPITALS, correct)
         if (index + 1 >= questions.size) onFinished(answers.toList()) else index++
     }
 

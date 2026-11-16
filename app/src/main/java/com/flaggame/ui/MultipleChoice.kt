@@ -30,13 +30,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun MultipleChoiceQuestion(data: GameData, place: Place, quiz: Quiz, pool: List<Place>, onNext: (Boolean) -> Unit) {
-    val options = remember(place) {
-        // Prefer look-alike distractors from the same group, then fill from anywhere.
-        val usable = data.places(place.set).filter { it != place && (quiz == Quiz.FLAGS || it.capital != null) }
-        val sameGroup = usable.filter { it.group == place.group }.shuffled()
-        val others = (pool + usable).distinct().filter { it != place && it in usable && it !in sameGroup }.shuffled()
-        (listOf(place) + (sameGroup.take(2) + others + sameGroup.drop(2)).distinct().take(3)).shuffled()
-    }
+    val options = remember(place) { pickOptions(data, place, quiz, pool) }
     var picked by remember(place) { mutableStateOf<Place?>(null) }
 
     LaunchedEffect(picked) {
@@ -88,4 +82,29 @@ fun MultipleChoiceQuestion(data: GameData, place: Place, quiz: Quiz, pool: List<
             }
         }
     }
+}
+
+/**
+ * The right answer plus three wrong ones, all from the chosen region or group (Europe only gives
+ * European options). For flags, two or three of the wrong ones are look-alikes (Ireland and
+ * Ivory Coast, Senegal and Mali) to make it tricky.
+ */
+private fun pickOptions(data: GameData, place: Place, quiz: Quiz, pool: List<Place>): List<Place> {
+    val candidates = pool.filter { it != place }
+    val wrong = mutableListOf<Place>()
+    if (quiz == Quiz.FLAGS) {
+        val byCode = candidates.associateBy { it.code }
+        val alike = place.lookalikes.mapNotNull { byCode[it] }
+        wrong += alike.take(5).shuffled().take(2)
+        wrong += (alike - wrong.toSet()).take(4).shuffled().take(1)
+    }
+    wrong += (candidates - wrong.toSet()).shuffled().take(3 - wrong.size)
+    if (wrong.size < 3) {
+        // Tiny region (fewer than four places): borrow from the rest of the set.
+        val rest = data.places(place.set).filter {
+            it != place && it !in wrong && (quiz == Quiz.FLAGS || it.capital != null)
+        }
+        wrong += rest.shuffled().take(3 - wrong.size)
+    }
+    return (listOf(place) + wrong).shuffled()
 }

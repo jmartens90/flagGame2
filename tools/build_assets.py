@@ -198,7 +198,35 @@ def write_map(set_dir, shapes, other, bounds, scale, cap_tol):
     json.dump({"scale": scale, "bounds": bounds, "capTol": cap_tol, "shapes": shapes, "other": other},
               open(f"{set_dir}/map.json", "w"), separators=(",", ":"))
 
+def add_lookalikes(set_dir, items, n=12):
+    """Lists, per flag, the flags in the same set that look most alike (for tricky multiple choice).
+
+    Combines two distances: the picture itself (Ireland vs Ivory Coast, Chad vs Romania) and its mix
+    of colours regardless of layout (Senegal vs Ghana, Comoros vs Mauritius), so stripes in another
+    order or direction still count as alike."""
+    feats = {}
+    for it in items:
+        img = Image.open(f"{set_dir}/flags/{it['code']}.webp").convert("RGB")
+        lab = to_lab(np.asarray(img.resize((24, 16), Image.BILINEAR)).reshape(-1, 3))
+        big = to_lab(np.asarray(img.resize((96, 64), Image.BILINEAR)).reshape(-1, 3))
+        hist = np.bincount(classify(big), minlength=len(PALETTE)) / big.shape[0]
+        feats[it["code"]] = (lab, hist)
+    for it in items:
+        a_lab, a_hist = feats[it["code"]]
+        scores = []
+        for other in items:
+            if other is it: continue
+            b_lab, b_hist = feats[other["code"]]
+            picture = np.linalg.norm(a_lab - b_lab, axis=1).mean() / 60
+            colours = np.abs(a_hist - b_hist).sum() / 2
+            scores.append((min(picture, 1.0) + colours, other["code"]))
+        it["lookalikes"] = [c for _, c in sorted(scores)[:n]]
+
 def write_items(set_dir, items):
+    for it in items:
+        if "lookalikes" not in it and os.path.exists(f"{set_dir}/flags/{it['code']}.webp"):
+            add_lookalikes(set_dir, items)
+            break
     json.dump(items, open(f"{set_dir}/items.json", "w"), ensure_ascii=False, separators=(",", ":"))
 
 # ---------------------------------------------------------------- capitals

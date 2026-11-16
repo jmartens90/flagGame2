@@ -35,6 +35,8 @@ data class Place(
     val capitalY: Float,
     /** Another place in the set has the same name (Liège the city and Liège the province). */
     val qualified: Boolean = false,
+    /** Codes of the flags in this set that look most alike, most alike first. */
+    val lookalikes: List<String> = emptyList(),
 ) {
     private val lang get() = Locale.getDefault().language
 
@@ -150,6 +152,7 @@ data class Place(
                 capitalAlt = strings("capitalAlt"),
                 capitalX = o.optDouble("cx", 0.0).toFloat(),
                 capitalY = o.optDouble("cy", 0.0).toFloat(),
+                lookalikes = strings("lookalikes"),
             )
         }
     }
