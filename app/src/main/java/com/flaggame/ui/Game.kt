@@ -112,9 +112,10 @@ fun GameScreen(
 }
 
 @Composable
-fun FlagImage(data: GameData, place: Place, modifier: Modifier = Modifier) {
+fun FlagImage(data: GameData, place: Place, modifier: Modifier = Modifier, fitSpace: Boolean = false) {
     val bitmap = remember(place) { data.flag(place).asImageBitmap() }
-    Box(modifier.aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
+    // fitSpace: fill whatever room the parent gives (shrinking the flag to fit) instead of a fixed 4:3 box.
+    Box(if (fitSpace) modifier else modifier.aspectRatio(4f / 3f), contentAlignment = Alignment.Center) {
         Image(
             bitmap = bitmap,
             contentDescription = "Flag",

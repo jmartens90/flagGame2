@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
@@ -83,11 +81,11 @@ fun TypeAnswerQuestion(data: GameData, place: Place, quiz: Quiz, onNext: (Boolea
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Modifier.fillMaxSize().padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FlagImage(data, place, Modifier.fillMaxWidth())
+        FlagImage(data, place, Modifier.weight(1f).fillMaxWidth(), fitSpace = true)
         Text(questionText(place, quiz), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(

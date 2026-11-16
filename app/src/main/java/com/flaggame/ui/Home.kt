@@ -1,6 +1,8 @@
 package com.flaggame.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -69,78 +71,99 @@ fun HomeScreen(data: GameData, scores: Scores, onStart: (GameConfig) -> Unit) {
     }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            Modifier
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Flag Game", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        // On wide screens (tablets, landscape) the choices and the games sit side by side.
+        BoxWithConstraints(Modifier.safeDrawingPadding()) {
+            val settings: @Composable ColumnScope.() -> Unit = {
+                Text("Flag Game", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
 
-            Section("Flags of")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FlagSet.entries.forEach { s ->
-                    FilterChip(selected = set == s, onClick = { set = s; group = ALL }, label = { Text(s.title) })
+                Section("Flags of")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlagSet.entries.forEach { s ->
+                        FilterChip(selected = set == s, onClick = { set = s; group = ALL }, label = { Text(s.title) })
+                    }
                 }
-            }
-            Section(if (set == FlagSet.BELGIUM) "Show" else "Region")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                groups.forEach { g ->
-                    FilterChip(selected = group == g, onClick = { group = g }, label = { Text(g) })
+                Section(if (set == FlagSet.BELGIUM) "Show" else "Region")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    groups.forEach { g ->
+                        FilterChip(selected = group == g, onClick = { group = g }, label = { Text(g) })
+                    }
                 }
-            }
-            Section("Quiz")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Quiz.entries.forEach { q ->
-                    FilterChip(selected = quiz == q, onClick = { quiz = q }, label = { Text(q.title) })
+                Section("Quiz")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Quiz.entries.forEach { q ->
+                        FilterChip(selected = quiz == q, onClick = { quiz = q }, label = { Text(q.title) })
+                    }
                 }
-            }
-            Section("Questions")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(10 to "10", 20 to "20", 0 to "All ($count)").forEach { (n, label) ->
-                    FilterChip(selected = length == n, onClick = { length = n }, label = { Text(label) })
+                Section("Questions")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(10 to "10", 20 to "20", 0 to "All ($count)").forEach { (n, label) ->
+                        FilterChip(selected = length == n, onClick = { length = n }, label = { Text(label) })
+                    }
                 }
-            }
 
-            Section("Game")
-            Mode.entries.forEach { mode ->
-                val enabled = count > 0 && !(mode == Mode.COLOR && quiz == Quiz.CAPITALS)
-                val config = GameConfig(set, quiz, mode, group, length)
-                ElevatedCard(
-                    onClick = { onStart(config) },
-                    enabled = enabled,
-                    modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.5f),
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(mode.icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(mode.title, style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                if (quiz == Quiz.CAPITALS) mode.capitals else mode.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        val best = scores.best(config.scoreKey)
-                        if (enabled && best >= 0) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Best", style = MaterialTheme.typography.labelSmall)
-                                Text("$best%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            val games: @Composable ColumnScope.() -> Unit = {
+                Section("Game")
+                Mode.entries.forEach { mode ->
+                    val enabled = count > 0 && !(mode == Mode.COLOR && quiz == Quiz.CAPITALS)
+                    val config = GameConfig(set, quiz, mode, group, length)
+                    ElevatedCard(
+                        onClick = { onStart(config) },
+                        enabled = enabled,
+                        modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.5f),
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(mode.icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(mode.title, style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    if (quiz == Quiz.CAPITALS) mode.capitals else mode.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            val best = scores.best(config.scoreKey)
+                            if (enabled && best >= 0) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Best", style = MaterialTheme.typography.labelSmall)
+                                    Text("$best%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
+                Text(
+                    "Flags: region-flags and Wikimedia Commons (public domain, CC0, CC BY-SA). " +
+                        "Maps: Natural Earth (public domain), US Census Bureau, © EuroGeographics for the Belgian provinces. " +
+                        "Names: world-countries (ODbL), capitals located with GeoNames (CC BY 4.0).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
             }
-            Text(
-                "Flags: flag-icons (MIT), region-flags and Wikimedia Commons (public domain, CC0, CC BY-SA). " +
-                    "Maps: Natural Earth (public domain), US Census Bureau, © EuroGeographics for the Belgian provinces. " +
-                    "Names: world-countries (ODbL), capitals located with GeoNames (CC BY 4.0).",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp),
-            )
+            if (maxWidth > maxHeight) {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = settings,
+                    )
+                    Column(
+                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = games,
+                    )
+                }
+            } else {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    settings()
+                    games()
+                }
+            }
         }
     }
 }

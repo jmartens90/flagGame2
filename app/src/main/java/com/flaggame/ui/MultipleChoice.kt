@@ -1,13 +1,14 @@
 package com.flaggame.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -42,31 +43,49 @@ fun MultipleChoiceQuestion(data: GameData, place: Place, quiz: Quiz, pool: List<
         if (picked == place) { delay(900); onNext(true) }
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        FlagImage(data, place, Modifier.fillMaxWidth())
-        Text(questionText(place, quiz), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        options.forEach { option ->
-            val color = when {
-                picked == null -> MaterialTheme.colorScheme.primary
-                option == place -> Correct
-                option == picked -> Wrong
-                else -> Color.Gray
+    // Everything fits on one screen: the flag takes whatever room the question and answers leave.
+    // On wide screens (tablets, landscape) the flag sits beside the answers.
+    BoxWithConstraints(Modifier.fillMaxSize().padding(20.dp)) {
+        val wide = maxWidth > maxHeight
+        val answers: @Composable () -> Unit = {
+            Text(questionText(place, quiz), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            options.forEach { option ->
+                val color = when {
+                    picked == null -> MaterialTheme.colorScheme.primary
+                    option == place -> Correct
+                    option == picked -> Wrong
+                    else -> Color.Gray
+                }
+                Button(
+                    onClick = { if (picked == null) picked = option },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = color, disabledContainerColor = color),
+                ) {
+                    Text(answerOf(option, quiz), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                }
             }
-            Button(
-                onClick = { if (picked == null) picked = option },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = color, disabledContainerColor = color),
-            ) {
-                Text(answerOf(option, quiz), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            val p = picked
+            if (p != null && p != place) {
+                Feedback(false, answerOf(place, quiz)) { onNext(false) }
             }
         }
-        val p = picked
-        if (p != null && p != place) {
-            Feedback(false, answerOf(place, quiz)) { onNext(false) }
+        if (wide) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlagImage(data, place, Modifier.weight(1f).fillMaxHeight(), fitSpace = true)
+                Column(
+                    Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+                ) { answers() }
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FlagImage(data, place, Modifier.weight(1f).fillMaxWidth(), fitSpace = true)
+                answers()
+            }
         }
     }
 }

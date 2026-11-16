@@ -46,8 +46,7 @@ python3 tools/build_assets.py <src> app/src/main/assets
 
 ## Credits and licences
 
-- Country and territory flags: [flag-icons](https://github.com/lipis/flag-icons), MIT licence.
-- US state flags: [region-flags](https://github.com/fonttools/region-flags), public domain.
+- Country, territory and US state flags: [region-flags](https://github.com/fonttools/region-flags), public domain, in their official proportions.
 - Belgian province and city flags: Wikimedia Commons, public domain, CC0 or CC BY-SA (each file's source and licence is listed in `tools/belgium_flags.json`).
 - World map: [Natural Earth](https://www.naturalearthdata.com/) 1:50m, public domain, via [world-atlas](https://github.com/topojson/world-atlas) (ISC).
 - US map: US Census Bureau cartographic boundaries via [us-atlas](https://github.com/topojson/us-atlas) (ISC).

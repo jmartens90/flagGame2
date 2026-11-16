@@ -8,10 +8,10 @@ Each flag set ends up in app/src/main/assets/<set>/:
   color/       colouring templates: every pixel in one of the PALETTE colours (png)
 
 Sources (see README for licences), extracted under <src>:
-  flag-icons/package        npm flag-icons           country and territory flags
+  flag-icons/package        npm flag-icons           used to spot territories that fly another flag
   world-atlas/package       npm world-atlas          Natural Earth country shapes
   world-countries/package   npm world-countries      names, capitals, regions
-  region-flags/package      npm region-flags         US state flags
+  region-flags/package      npm region-flags         country, territory and US state flags
   us-atlas/package          npm us-atlas             US Census state shapes (Albers USA)
   belgium/                  tools/fetch_belgium.py   Wikimedia Commons flags + Eurostat GISCO provinces
   points.json               tools/project_us.mjs     US capitals projected like us-atlas
@@ -65,8 +65,21 @@ def classify(lab):
 assert classify(to_lab(np.array([p[1] for p in PALETTE]))).tolist() == list(range(len(PALETTE)))
 
 # ---------------------------------------------------------------- flags
+def expand_entities(text):
+    """Inline <!ENTITY> definitions (Illustrator exports), which the SVG renderer refuses for safety."""
+    import re
+    ents = dict(re.findall(r'<!ENTITY\s+(\w+)\s+"([^"]*)"\s*>', text))
+    text = re.sub(r"<!DOCTYPE[^\[>]*\[.*?\]>", "", text, flags=re.S)
+    for k, v in ents.items():
+        text = text.replace(f"&{k};", v)
+    return text
+
 def render(svg, width=None, height=None):
-    png = cairosvg.svg2png(url=svg, output_width=width, output_height=height)
+    text = open(svg, encoding="utf-8").read()
+    if "<!ENTITY" in text:
+        png = cairosvg.svg2png(bytestring=expand_entities(text).encode(), output_width=width, output_height=height)
+    else:
+        png = cairosvg.svg2png(url=svg, output_width=width, output_height=height)
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 def flatten(img):
@@ -301,7 +314,8 @@ for set_name, members in (("countries", sovereign), ("territories", territories)
     shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
     items = sorted((country_item(c) for c in members), key=lambda i: i["name"])
     codes = {i["code"] for i in items}
-    n = write_flags(d, items, lambda it: f"{FLAGS}/{it['code']}.svg", max_w=480, h=360)
+    # region-flags keeps each flag's real proportions (Monaco 4:5, Qatar 11:28); flag-icons squeezes all to 4:3.
+    n = write_flags(d, items, lambda it: f"{SRC}/region-flags/package/svg/{it['code'].upper()}.svg")
     shapes = {k: v for k, v in world_rings.items() if k in codes}
     other = [r for k, v in world_rings.items() if k not in codes for r in v]
     write_map(d, shapes, other, WORLD_BOUNDS, 10, 2.5)

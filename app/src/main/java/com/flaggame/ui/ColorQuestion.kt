@@ -19,6 +19,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -140,74 +142,97 @@ fun ColorQuestion(data: GameData, place: Place, onNext: (Boolean) -> Unit) {
     val image = remember(fills.toMap(), wrong) { template.render(fills, wrong).asImageBitmap() }
     val allFilled = template.regions.all { it in fills }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            "Colour the flag of ${place.label}",
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "Pick a colour, then tap a part of the flag. Parts that share a colour fill together. Pinch or use + to zoom in.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        ZoomableFlag(template.w.toFloat() / template.h, enabled = !checked, onTap = { fx, fy ->
-            val x = (fx * template.w).toInt().coerceIn(0, template.w - 1)
-            val y = (fy * template.h).toInt().coerceIn(0, template.h - 1)
-            fills[template.regionAt(x, y)] = selected
-        }) {
-            Image(
-                bitmap = image,
-                contentDescription = "Flag to colour",
-                contentScale = ContentScale.FillBounds,
-                filterQuality = FilterQuality.None,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Palette.forEachIndexed { i, (name, color) ->
-                Box(
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                        .border(
-                            if (i == selected) 4.dp else 1.dp,
-                            if (i == selected) MaterialTheme.colorScheme.primary else Color.Gray,
-                            CircleShape,
+    // Everything fits on one screen. The flag takes whatever room is left; on wide screens
+    // (tablets, landscape) the palette and buttons sit beside it.
+    BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp)) {
+        val wide = maxWidth > maxHeight
+        val flagArea: @Composable (Modifier) -> Unit = { m ->
+            Column(m, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    ZoomableFlag(template.w.toFloat() / template.h, enabled = !checked, onTap = { fx, fy ->
+                        val x = (fx * template.w).toInt().coerceIn(0, template.w - 1)
+                        val y = (fy * template.h).toInt().coerceIn(0, template.h - 1)
+                        fills[template.regionAt(x, y)] = selected
+                    }) {
+                        Image(
+                            bitmap = image,
+                            contentDescription = "Flag to colour",
+                            contentScale = ContentScale.FillBounds,
+                            filterQuality = FilterQuality.None,
+                            modifier = Modifier.fillMaxSize(),
                         )
-                        .clickable(enabled = !checked) { selected = i }
-                        .semantics { contentDescription = name },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (i == selected) {
-                        Icon(Icons.Filled.Check, null, tint = if (name in setOf("White", "Yellow", "Light blue")) Color.Black else Color.White)
                     }
+                }
+                if (checked && wrong.isNotEmpty()) {
+                    Text("The real flag:", style = MaterialTheme.typography.titleMedium)
+                    FlagImage(data, place, Modifier.weight(1f).fillMaxWidth(), fitSpace = true)
                 }
             }
         }
-        if (!checked) {
-            Button(onClick = { checked = true }, enabled = allFilled, modifier = Modifier.fillMaxWidth()) {
-                Text(if (allFilled) "Check" else "Colour every part to check")
+        val controls: @Composable () -> Unit = {
+            if (!checked) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Palette.forEachIndexed { i, (name, color) ->
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    if (i == selected) 4.dp else 1.dp,
+                                    if (i == selected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                    CircleShape,
+                                )
+                                .clickable { selected = i }
+                                .semantics { contentDescription = name },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (i == selected) {
+                                Icon(Icons.Filled.Check, null, tint = if (name in setOf("White", "Yellow", "Light blue")) Color.Black else Color.White)
+                            }
+                        }
+                    }
+                }
+                Button(onClick = { checked = true }, enabled = allFilled, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (allFilled) "Check" else "Colour every part to check")
+                }
+            } else {
+                val ok = wrong.isEmpty()
+                Feedback(
+                    ok, place.label,
+                    if (ok) null else "${template.regions.size - wrong.size} of ${template.regions.size} colours right. Striped parts were wrong.",
+                ) { onNext(ok) }
+            }
+        }
+        val title: @Composable () -> Unit = {
+            Text("Colour the flag of ${place.label}", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            if (!checked) {
+                Text(
+                    "Pick a colour, then tap the flag. Pinch to zoom in, double tap to zoom out.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        if (wide) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                flagArea(Modifier.weight(1.4f).fillMaxHeight())
+                Column(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                ) { title(); controls() }
             }
         } else {
-            val ok = wrong.isEmpty()
-            Feedback(
-                ok, place.label,
-                if (ok) null else "${template.regions.size - wrong.size} of ${template.regions.size} colours right. Striped parts were wrong.",
-            ) { onNext(ok) }
-            if (!ok) {
-                Text("The real flag:", style = MaterialTheme.typography.titleMedium)
-                FlagImage(data, place, Modifier.fillMaxWidth(0.6f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                title()
+                flagArea(Modifier.weight(1f).fillMaxWidth())
+                controls()
             }
         }
     }
@@ -235,7 +260,6 @@ private fun ZoomableFlag(aspect: Float, enabled: Boolean, onTap: (Float, Float) 
     }
     Box(
         Modifier
-            .fillMaxWidth()
             .aspectRatio(aspect)
             .clip(RoundedCornerShape(6.dp))
             .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
@@ -248,10 +272,12 @@ private fun ZoomableFlag(aspect: Float, enabled: Boolean, onTap: (Float, Float) 
                 }
             }
             .pointerInput(enabled) {
-                detectTapGestures { p ->
-                    if (!enabled) return@detectTapGestures
-                    onTap((p.x - pan.x) / (size.width * zoom), (p.y - pan.y) / (size.height * zoom))
-                }
+                detectTapGestures(
+                    onDoubleTap = { zoom = 1f; pan = Offset.Zero },
+                    onTap = { p ->
+                        if (enabled) onTap((p.x - pan.x) / (size.width * zoom), (p.y - pan.y) / (size.height * zoom))
+                    },
+                )
             },
     ) {
         Box(
