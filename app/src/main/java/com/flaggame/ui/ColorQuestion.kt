@@ -6,8 +6,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -45,8 +58,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.flaggame.data.Country
 import com.flaggame.data.GameData
+import com.flaggame.data.Place
 
 /** Must match PALETTE in tools/build_assets.py: the template images are drawn in exactly these colours. */
 val Palette = listOf(
@@ -119,91 +132,164 @@ private class Template(bitmap: Bitmap) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ColorQuestion(data: GameData, country: Country, onNext: (Boolean) -> Unit) {
-    val template = remember(country) { Template(data.colorTemplate(country.code)) }
-    val fills = remember(country) { mutableStateMapOf<Int, Int>() }
-    var selected by remember(country) { mutableStateOf(0) }
-    var checked by remember(country) { mutableStateOf(false) }
+fun ColorQuestion(data: GameData, place: Place, onNext: (Boolean) -> Unit) {
+    val template = remember(place) { Template(data.colorTemplate(place)) }
+    val fills = remember(place) { mutableStateMapOf<Int, Int>() }
+    var selected by remember(place) { mutableStateOf(0) }
+    var checked by remember(place) { mutableStateOf(false) }
 
     val wrong = if (checked) template.regions.filter { fills[it] != it }.toSet() else emptySet()
     val image = remember(fills.toMap(), wrong) { template.render(fills, wrong).asImageBitmap() }
     val allFilled = template.regions.all { it in fills }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            "Colour the flag of ${country.displayName}",
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "Pick a colour, then tap a part of the flag. Parts that share a colour fill together.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Image(
-            bitmap = image,
-            contentDescription = "Flag to colour",
-            contentScale = ContentScale.FillBounds,
-            filterQuality = FilterQuality.None,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(template.w.toFloat() / template.h)
-                .clip(RoundedCornerShape(6.dp))
-                .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
-                .pointerInput(country, checked) {
-                    detectTapGestures { p ->
-                        if (checked) return@detectTapGestures
-                        val x = (p.x / size.width * template.w).toInt().coerceIn(0, template.w - 1)
-                        val y = (p.y / size.height * template.h).toInt().coerceIn(0, template.h - 1)
+    // Everything fits on one screen. The flag takes whatever room is left; on wide screens
+    // (tablets, landscape) the palette and buttons sit beside it.
+    BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp)) {
+        val wide = maxWidth > maxHeight
+        val flagArea: @Composable (Modifier) -> Unit = { m ->
+            Column(m, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    ZoomableFlag(template.w.toFloat() / template.h, enabled = !checked, onTap = { fx, fy ->
+                        val x = (fx * template.w).toInt().coerceIn(0, template.w - 1)
+                        val y = (fy * template.h).toInt().coerceIn(0, template.h - 1)
                         fills[template.regionAt(x, y)] = selected
-                    }
-                },
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Palette.forEachIndexed { i, (name, color) ->
-                Box(
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                        .border(
-                            if (i == selected) 4.dp else 1.dp,
-                            if (i == selected) MaterialTheme.colorScheme.primary else Color.Gray,
-                            CircleShape,
+                    }) {
+                        Image(
+                            bitmap = image,
+                            contentDescription = "Flag to colour",
+                            contentScale = ContentScale.FillBounds,
+                            filterQuality = FilterQuality.None,
+                            modifier = Modifier.fillMaxSize(),
                         )
-                        .clickable(enabled = !checked) { selected = i }
-                        .semantics { contentDescription = name },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (i == selected) {
-                        Icon(Icons.Filled.Check, null, tint = if (name in setOf("White", "Yellow", "Light blue")) Color.Black else Color.White)
                     }
+                }
+                if (checked && wrong.isNotEmpty()) {
+                    Text("The real flag:", style = MaterialTheme.typography.titleMedium)
+                    FlagImage(data, place, Modifier.weight(1f).fillMaxWidth(), fitSpace = true)
                 }
             }
         }
-        if (!checked) {
-            Button(onClick = { checked = true }, enabled = allFilled, modifier = Modifier.fillMaxWidth()) {
-                Text(if (allFilled) "Check" else "Colour every part to check")
+        val controls: @Composable () -> Unit = {
+            if (!checked) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Palette.forEachIndexed { i, (name, color) ->
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    if (i == selected) 4.dp else 1.dp,
+                                    if (i == selected) MaterialTheme.colorScheme.primary else Color.Gray,
+                                    CircleShape,
+                                )
+                                .clickable { selected = i }
+                                .semantics { contentDescription = name },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (i == selected) {
+                                Icon(Icons.Filled.Check, null, tint = if (name in setOf("White", "Yellow", "Light blue")) Color.Black else Color.White)
+                            }
+                        }
+                    }
+                }
+                Button(onClick = { checked = true }, enabled = allFilled, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (allFilled) "Check" else "Colour every part to check")
+                }
+            } else {
+                val ok = wrong.isEmpty()
+                Feedback(
+                    ok, place.label,
+                    if (ok) null else "${template.regions.size - wrong.size} of ${template.regions.size} colours right. Striped parts were wrong.",
+                ) { onNext(ok) }
+            }
+        }
+        val title: @Composable () -> Unit = {
+            Text("Colour the flag of ${place.label}", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            if (!checked) {
+                Text(
+                    "Pick a colour, then tap the flag. Pinch to zoom in, double tap to zoom out.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        if (wide) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                flagArea(Modifier.weight(1.4f).fillMaxHeight())
+                Column(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                ) { title(); controls() }
             }
         } else {
-            val ok = wrong.isEmpty()
-            Feedback(
-                ok, country,
-                if (ok) null else "${template.regions.size - wrong.size} of ${template.regions.size} colours right. Striped parts were wrong.",
-            ) { onNext(ok) }
-            if (!ok) {
-                Text("The real flag:", style = MaterialTheme.typography.titleMedium)
-                FlagImage(data, country, Modifier.fillMaxWidth(0.6f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                title()
+                flagArea(Modifier.weight(1f).fillMaxWidth())
+                controls()
             }
+        }
+    }
+}
+
+/**
+ * The flag being coloured, with pinch-to-zoom, drag to pan and +/- buttons.
+ * Taps are reported as fractions (0..1) of the flag's width and height.
+ */
+@Composable
+private fun ZoomableFlag(aspect: Float, enabled: Boolean, onTap: (Float, Float) -> Unit, content: @Composable () -> Unit) {
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    fun clamp() {
+        zoom = zoom.coerceIn(1f, 6f)
+        val maxX = size.width * (zoom - 1); val maxY = size.height * (zoom - 1)
+        pan = Offset(pan.x.coerceIn(-maxX, 0f), pan.y.coerceIn(-maxY, 0f))
+    }
+    fun zoomBy(k: Float, center: Offset = Offset(size.width / 2f, size.height / 2f)) {
+        val old = zoom
+        zoom = (zoom * k).coerceIn(1f, 6f)
+        pan = (pan - center) * (zoom / old) + center
+        clamp()
+    }
+    Box(
+        Modifier
+            .aspectRatio(aspect)
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
+            .onSizeChanged { size = it }
+            .pointerInput(Unit) {
+                detectTransformGestures { centroid, p, z, _ ->
+                    zoomBy(z, centroid)
+                    pan += p
+                    clamp()
+                }
+            }
+            .pointerInput(enabled) {
+                detectTapGestures(
+                    onDoubleTap = { zoom = 1f; pan = Offset.Zero },
+                    onTap = { p ->
+                        if (enabled) onTap((p.x - pan.x) / (size.width * zoom), (p.y - pan.y) / (size.height * zoom))
+                    },
+                )
+            },
+    ) {
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                scaleX = zoom; scaleY = zoom
+                translationX = pan.x; translationY = pan.y
+                transformOrigin = TransformOrigin(0f, 0f)
+            },
+        ) { content() }
+        Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            SmallFloatingActionButton(onClick = { zoomBy(1 / 1.6f) }) { Icon(Icons.Filled.ZoomOut, "Zoom out") }
+            SmallFloatingActionButton(onClick = { zoomBy(1.6f) }) { Icon(Icons.Filled.ZoomIn, "Zoom in") }
         }
     }
 }

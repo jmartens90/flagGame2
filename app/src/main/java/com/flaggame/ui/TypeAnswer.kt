@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
@@ -38,24 +36,27 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.flaggame.data.Country
 import com.flaggame.data.GameData
+import com.flaggame.data.Place
 import kotlinx.coroutines.delay
 
 @Composable
-fun TypeAnswerQuestion(data: GameData, country: Country, onNext: (Boolean) -> Unit) {
+fun TypeAnswerQuestion(data: GameData, place: Place, quiz: Quiz, onNext: (Boolean) -> Unit) {
+    val all = data.places(place.set)
+    val check: (String) -> Boolean = { if (quiz == Quiz.CAPITALS) place.matchesCapital(it, all) else place.matches(it, all) }
     val context = LocalContext.current
-    var text by remember(country) { mutableStateOf("") }
-    var result by remember(country) { mutableStateOf<Boolean?>(null) }
-    var tries by remember(country) { mutableStateOf(0) }
-    var hint by remember(country) { mutableStateOf<String?>(null) }
+    var text by remember(place) { mutableStateOf("") }
+    var result by remember(place) { mutableStateOf<Boolean?>(null) }
+    var tries by remember(place) { mutableStateOf(0) }
+    var hint by remember(place) { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val voiceAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
 
     fun submit(candidates: List<String>) {
         if (result != null) return
-        if (candidates.any { country.matches(it, data.countries) }) {
+        if (candidates.any { check(it) }) {
             result = true
         } else {
             tries++
@@ -68,7 +69,7 @@ fun TypeAnswerQuestion(data: GameData, country: Country, onNext: (Boolean) -> Un
         if (res.resultCode == Activity.RESULT_OK) {
             val heard = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
             if (heard.isNotEmpty()) {
-                text = heard.firstOrNull { country.matches(it, data.countries) } ?: heard.first()
+                text = heard.firstOrNull { check(it) } ?: heard.first()
                 submit(heard)
             }
         }
@@ -80,17 +81,17 @@ fun TypeAnswerQuestion(data: GameData, country: Country, onNext: (Boolean) -> Un
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Modifier.fillMaxSize().padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FlagImage(data, country, Modifier.fillMaxWidth())
-        Text("Which country is this?", style = MaterialTheme.typography.titleLarge)
+        FlagImage(data, place, Modifier.weight(1f).fillMaxWidth(), fitSpace = true)
+        Text(questionText(place, quiz), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it; hint = null },
-                label = { Text("Country") },
+                label = { Text(if (quiz == Quiz.CAPITALS) "Capital" else place.kind.replaceFirstChar { it.uppercase() }) },
                 singleLine = true,
                 enabled = result == null,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
@@ -103,7 +104,7 @@ fun TypeAnswerQuestion(data: GameData, country: Country, onNext: (Boolean) -> Un
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-                            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Say the country")
+                            .putExtra(RecognizerIntent.EXTRA_PROMPT, if (quiz == Quiz.CAPITALS) "Say the capital" else "Say the ${place.kind}")
                         runCatching { speech.launch(intent) }
                     },
                     enabled = result == null,
@@ -119,8 +120,8 @@ fun TypeAnswerQuestion(data: GameData, country: Country, onNext: (Boolean) -> Un
                     Text("Check")
                 }
             }
-            true -> Feedback(true, country) { onNext(true) }
-            false -> Feedback(false, country) { onNext(false) }
+            true -> Feedback(true, answerOf(place, quiz)) { onNext(true) }
+            false -> Feedback(false, answerOf(place, quiz)) { onNext(false) }
         }
     }
 }

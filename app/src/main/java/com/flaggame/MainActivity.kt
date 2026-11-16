@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.flaggame.data.GameData
+import com.flaggame.data.Progress
 import com.flaggame.data.Scores
 import com.flaggame.ui.FlagGameTheme
 import com.flaggame.ui.GameConfig
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
                 val context = LocalContext.current
                 val data = remember { GameData.get(context) }
                 val scores = remember { Scores(context) }
+                val progress = remember { Progress(context) }
                 var config by remember { mutableStateOf<GameConfig?>(null) }
                 var result by remember { mutableStateOf<GameResult?>(null) }
                 var round by rememberSaveable { mutableStateOf(0) }
@@ -49,12 +51,13 @@ class MainActivity : ComponentActivity() {
                         BackHandler { config = null }
                         GameScreen(
                             data = data,
+                            progress = progress,
                             config = c,
                             round = round,
                             onQuit = { config = null },
                             onFinished = { answers ->
                                 val pct = if (answers.isEmpty()) 0 else answers.count { it.correct } * 100 / answers.size
-                                val newBest = scores.record(c.mode.name, c.region, pct)
+                                val newBest = scores.record(c.scoreKey, pct)
                                 result = GameResult(c, answers, pct, newBest)
                             },
                         )
@@ -62,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     else -> HomeScreen(
                         data = data,
                         scores = scores,
+                        progress = progress,
                         onStart = { config = it; round++ },
                     )
                 }
